@@ -4,7 +4,7 @@
 
 - 演示地址：<http://121.43.236.209:8081>（当前为 HTTP 演示环境，无域名/HTTPS）
 - 现状汇报：[`docs/24点单人挑战_现状汇报_2026-11-05.docx`](docs/24点单人挑战_现状汇报_2026-11-05.docx)
-- 规则说明：[`docs/24点游戏_单人挑战与排行榜_规则说明.md`](docs/24点游戏_单人挑战与排行榜_规则说明.md)
+- 玩法说明：现状汇报第一章；`docs/` 内的旧规则文档未同步，暂不作为口径
 
 ## 目录
 
@@ -13,7 +13,7 @@ demo/server   Spring Boot 3 + Java 21 + Maven Wrapper
 demo/web      Vite + TypeScript + fraction.js
 compose.yaml  本地开发用 PostgreSQL 16
 Dockerfile / compose.prod.yaml / deploy/   容器化与生产部署资产
-docs/         规则、架构、部署记录与现状汇报
+docs/         玩法、架构、部署记录与现状汇报
 design/       界面参考与静态稿
 ```
 

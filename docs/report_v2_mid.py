@@ -58,7 +58,7 @@ table(
     first_col_bold=True,
 )
 para("全局状态集中在 main.ts：view、game、editor、mode、level、account、lbMode/lbLevel/lbPage、recMode/recLevel，以及时钟锚点。render() 先停表、清弹窗，再按 view 重建 DOM；records 与 leaderboard 是异步视图，用 renderSeq 防止旧请求覆盖新页面。")
-para("没有路由、没有 history、没有深链，也没有把 gameId 写进 URL 或 localStorage。因此刷新页面总是回到首页；这是 7.2 R3 的一部分。")
+para("没有路由、没有 history、没有深链，也没有把 gameId 写进 URL 或 localStorage。因此刷新页面总是回到首页；这是 7.1 R3 的一部分。")
 
 h2("3.4", "作答编辑器（merge.ts）")
 para("merge.ts 是一个不依赖 DOM 的纯函数模块，负责“牌树”和“操作步骤”。核心结构是一个 Card：")
@@ -102,7 +102,7 @@ for s_ in [
     "没有错误边界；异步视图失败只显示一行“加载失败”，没有重试按钮。",
     "以 innerHTML 模板为主；昵称等少数服务端字符串有 esc()，新增字段容易漏转义。",
     "现有 24 个用例是 jsdom + fake timers + fetch stub；本次另补了 headless Chrome E2E 11 项，但仍没有真机/多浏览器矩阵。",
-    "成绩/榜单时间直接截取 ISO 字符串显示，线上是 UTC，和本地时间差 8 小时（见 7.2 R7）。",
+    "成绩/榜单时间直接截取 ISO 字符串显示，线上是 UTC，和本地时间差 8 小时（见 7.1 R7）。",
     "没有离线/PWA、深色模式、国际化；中文文案硬编码在 main.ts。",
     "main.ts 单文件 1,076 行，视图、事件、时钟、弹窗都在一起，后续修改的回归面较大。",
 ]:
@@ -181,7 +181,7 @@ bullet("所有写操作在 @Transactional 内；同一局用 SELECT ... FOR UPDA
 bullet("game_actions 的 (game_id, action_id) 唯一；同一 actionId + 相同 fingerprint 返回当前局，不同 fingerprint 返回 409 ACTION_REUSED。response_jsonb 存了但没有被回放使用。", "幂等：")
 bullet("submit 正确后更新 correct_count 与 last_scoring_ms；B 模式达到 10 时 finish；错误则把 deadline 往前扣（A），B 只累加 penalty_ms。", "计数与罚时：")
 bullet("finish 先 INSERT game_results（game_id 唯一，保证一局只结算一次），再更新 games 状态，再按严格更优条件 upsert personal_bests；A 零题直接返回，不建最佳。", "结算：")
-bullet("advance 先看是否已结束、A 是否到期、当前题是否还 OPEN；否则开下一题；B 已答满则结算；deck 耗尽时重新洗牌（该路径有缺陷，见 7.2 R9）。", "下一题：")
+bullet("advance 先看是否已结束、A 是否到期、当前题是否还 OPEN；否则开下一题；B 已答满则结算；deck 耗尽时重新洗牌（该路径有缺陷，见 7.1 R9）。", "下一题：")
 
 h2("4.5", "判题内核")
 para("判题分两层：离线求解器与在线求值器。")
@@ -189,7 +189,7 @@ bullet("GameRules.solvable 递归地从当前数字集合中取两张、套一�
 bullet("ExpressionEvaluator 对提交的三步操作树逐条校验：恰好三步；引用必须已存在；每个引用只能被消费一次；算符必须属于该难度；除零拒绝；最终根必须是 s2；除根以外的中间结果必须被消费；四张原始牌必须各用一次。", "求值器：")
 bullet("校验失败抛 IllegalArgumentException；GameService 包成 422 INVALID_STEPS；其他请求参数问题由 Controller/全局处理器映射为 400。", "错误：")
 bullet("求解器只用于离线题池生成与测试，没有对外的“提示/答案”接口。", "边界：")
-para("服务端只接收操作树，不接收表达式字符串，因此不需要解析用户输入；这减少了注入与括号歧义，但不能阻止玩家用外部求解器辅助作弊（见 7.2 R5）。")
+para("服务端只接收操作树，不接收表达式字符串，因此不需要解析用户输入；这减少了注入与括号歧义，但不能阻止玩家用外部求解器辅助作弊（见 7.1 R5）。")
 
 h2("4.6", "题池")
 bullet("PuzzleGenerator 固定 MIN=1、MAX=13，穷举非降序四元组，校验候选数 1,820、L1 220、L2 1,362；不符直接抛错，避免静默生成错池。", "生成：")
@@ -236,7 +236,7 @@ table(
         ("POST /api/auth/refresh", "Cookie", "轮换 refresh，返回新 access token", "401 UNAUTHORIZED"),
         ("POST /api/auth/logout", "Cookie", "撤销 refresh 并清 cookie", "—"),
         ("GET /api/auth/me", "Bearer", "当前账号", "401 UNAUTHORIZED"),
-        ("POST /api/games", "公开/游客", "建局；requestId/mode/level", "400；500（字段缺失时见 7.2 R10）"),
+        ("POST /api/games", "公开/游客", "建局；requestId/mode/level", "400；500（字段缺失时见 7.1 R10）"),
         ("GET /api/games/{id}", "所有者", "读取/恢复；A 到期补结算", "403 PLAYER_MISMATCH；404 GAME_NOT_FOUND"),
         ("POST /api/games/{id}/submit", "所有者", "提交三步操作树", "409 REVISION_MISMATCH / GAME_CLOSED / GAME_EXPIRED / PUZZLE_CLOSED / ACTION_REUSED；422 INVALID_STEPS"),
         ("POST /api/games/{id}/skip", "所有者", "跳题并罚时", "409 同上；404；403"),
