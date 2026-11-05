@@ -1,0 +1,14 @@
+# 统一文本处理，避免 Word/PPT/图片被当作文本 diff
+* text=auto
+*.docx binary
+*.pptx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.jar binary
+*.zip binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
