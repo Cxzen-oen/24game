@@ -1,0 +1,11 @@
+**/node_modules
+**/target
+**/dist
+**/.vite
+.m2repo
+.git
+.env
+.env.prod
+docs
+design
+backups

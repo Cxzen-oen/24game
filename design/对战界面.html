@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>24点双人对战 · 对战页</title>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div class="stage" id="stage">
+  <header class="header">
+    <div class="logo">24</div>
+    <div class="brand">24点双人对战</div>
+  </header>
+
+  <!-- 顶部对比区 -->
+  <section class="player-card me" id="meCard">
+    <div class="row"><span class="who">你</span><span class="score mono" id="myScore">5</span><span class="score-label">答对</span></div>
+    <div class="state"><span class="dot"></span><span id="myState">作答中</span></div>
+  </section>
+
+  <section class="clock" id="clock">
+    <div class="mode" id="clockMode">限时赛</div>
+    <div class="time mono" id="clockTime">02:41</div>
+    <div class="label">剩余总时间</div>
+  </section>
+
+  <section class="player-card opponent" id="opCard">
+    <div class="row"><span class="who">对手</span><span class="score mono" id="opScore">4</span><span class="score-label">答对</span></div>
+    <div class="state"><span class="dot"></span><span id="opState">作答中</span></div>
+  </section>
+
+  <!-- 题号与进度 -->
+  <div class="progress">
+    <div class="label" id="progressLabel">当前第 6 题</div>
+    <div class="track" id="track"><div class="fill" id="fill"></div></div>
+    <div class="right mono" id="progressRight">剩余 02:41</div>
+  </div>
+
+  <!-- 题目 -->
+  <section class="question-card" id="questionCard">
+    <div class="qno" id="qno">第 6 题</div>
+    <div class="numbers" id="numbers"></div>
+    <div class="hint" id="levelHint">4 个数字各使用一次</div>
+  </section>
+
+  <!-- 作答面板：点两个数 + 一个算符，中间结果并成一张牌 -->
+  <section class="answer-panel">
+    <div class="merge-bar">
+      <div class="steps" id="steps"></div>
+      <button class="btn btn-ghost undo-btn" id="undo">撤销</button>
+    </div>
+    <div class="ops" id="ops"></div>
+    <div class="expr-preview" id="exprPreview">点两个数，选一个算符</div>
+    <div class="feedback" id="feedback">4 个数字各使用一次 · 点选两张牌再选算符，括号由点击顺序决定</div>
+
+    <div class="bottom-hint">快捷键：1–4 选牌 · + − × ÷ 选算符 · A 全部相加 · S 全部相乘 · Esc 撤销 · Enter 提交</div>
+    <button class="surrender focus-ring" id="surrender">弃权</button>
+  </section>
+
+  <!-- 本端断线 -->
+  <div class="disconnect-card" id="disconnectCard">
+    <h3>网络连接已断开</h3>
+    <p>比赛计时不会暂停</p>
+    <div class="count mono" id="reconnectCount">重连剩余 48 秒</div>
+    <button class="btn btn-primary" id="reconnect">立即重连</button>
+  </div>
+
+  <!-- 等待对手 -->
+  <div class="wait-card" id="waitCard">
+    <h3>你已完成全部 10 题</h3>
+    <p>等待对手完成 · 剩余 <span class="mono" id="waitTime">04:21</span></p>
+    <div class="stat">答对 10 题 · 最后正确提交累计用时 08:12</div>
+  </div>
+
+  <!-- 弃权确认 -->
+  <div class="overlay" id="surrenderOverlay">
+    <div class="modal" style="width:480px;height:248px;padding:32px;box-sizing:border-box">
+      <h3 style="font-size:24px">确认弃权？</h3>
+      <p style="font-size:14px;line-height:22px;margin-top:12px">弃权后本局立即判负，对手直接获胜，当前成绩不会计入最快纪录。</p>
+      <div class="actions" style="margin-top:20px;gap:12px">
+        <button class="btn btn-ghost" id="keepPlaying" style="height:48px;padding:0 24px">继续比赛</button>
+        <button class="btn btn-primary" id="confirmSurrender" style="height:48px;padding:0 24px;background:var(--danger)">确认弃权</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="devbar" id="devbar">
+  <b>原型演示</b>
+  <button data-demo="correct">正确（自动合并）</button>
+  <button data-demo="merge">合并到 24</button>
+  <button data-demo="wrong">凑不出 24</button>
+  <button data-demo="opponent">对手先答对</button>
+  <button data-demo="disconnect">本端断线</button>
+  <button data-demo="opponentDown">对手断线</button>
+  <button data-demo="wait">等待对手</button>
+  <button data-demo="finish">结算</button>
+  <button data-demo="reset">重置</button>
+  <a href="主界面.html" style="color:var(--muted)">回主界面</a>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const mode = params.get('mode') === 'fixed' ? 'fixed' : 'timed';
+const level = ['l1','l2','l3'].includes(params.get('level')) ? params.get('level') : 'l2';
+const secs = [90, 180, 300].includes(Number(params.get('secs'))) ? Number(params.get('secs')) : 180;
+const capture = params.has('capture');
+if (capture) document.body.classList.add('capture');
+
+/* L1/L2 用点牌合并；L3 的幂/开方/阶乘无法用两牌合并表达，保留自由文本 */
+const LEVELS = {
+  l1: {name:'加减级', merge:true, ops:['+','−'],
+       hint:'点两个数，再点 + 或 −；括号由点击顺序决定'},
+  l2: {name:'四则级', merge:true, ops:['+','−','×','÷'],
+       hint:'点两个数，再点 + − × ÷；括号由点击顺序决定'},
+  l3: {name:'扩展级', merge:false, ops:['+','−','×','÷','^','√','!'],
+       hint:'扩展级沿用手动输入：可以用幂、开方与阶乘'}
+};
+const LV = LEVELS[level];
+
+const PUZZLES = {
+  l1: [[8,9,5,2],[11,9,2,2],[13,7,3,1],[6,8,9,1],[10,12,1,1],[13,11,12,2],[7,9,12,4],[13,9,6,4]],
+  l2: [[5,6,7,8],[3,3,8,8],[1,5,5,5],[9,10,4,7],[2,3,4,12],[7,8,9,13],[1,4,5,6],[12,12,7,5]],
+  l3: [[1,2,3,4],[2,3,4,6],[3,3,3,3],[4,4,4,4],[1,5,5,5],[2,4,6,8],[3,3,7,7],[5,6,7,8]]
+}[level];
+
+const OPSYM = {'+':'+', '−':'−', '×':'×', '÷':'÷', '^':'^', '√':'√', '!':'!'};
+
+let puzzleIndex = 0;
+let questionNo = 6;
+let myScore = 5, opScore = 4;
+let total = mode === 'timed' ? secs - 19 : 545;
+let total0 = mode === 'timed' ? secs : 600;
+let cooldown = 0;
+let locked = false;
+const MAXQ = 10;
+
+/* ---- 合并状态 ---- */
+let tiles = [];          // {id, val, left, right, op}  left/right 为 null 表示原始牌
+let selected = [];       // 选中的牌 id（最多 2 张）
+let history = [];        // 撤销栈：每次推送 {tiles, selected} 快照
+let tileSeq = 0;
+
+const $ = id => document.getElementById(id);
+const submit = $('submit');
+const feedback = $('feedback');
+const clock = $('clock'), clockTime = $('clockTime');
+const myScoreEl = $('myScore'), opScoreEl = $('opScore');
+const progressLabel = $('progressLabel'), progressRight = $('progressRight');
+const track = $('track'), fill = $('fill');
+const numbersEl = $('numbers'), qno = $('qno'), questionCard = $('questionCard');
+const stepsEl = $('steps'), opsEl = $('ops'), exprPreview = $('exprPreview');
+const opState = $('opState');
+
+$('clockMode').textContent = (mode === 'timed' ? '限时赛 · ' + fmt(secs) : '定题赛') + ' · ' + LV.name;
+$('levelHint').textContent = '4 个数字各使用一次 · ' + LV.hint;
+if (mode === 'timed') {
+  progressLabel.textContent = '当前第 ' + questionNo + ' 题';
+} else {
+  buildSegments();
+  renderFixedProgress(4);
+  progressLabel.textContent = '第 ' + questionNo + ' / 10 题';
+}
+
+function fmt(s){
+  s = Math.max(0, Math.floor(s));
+  return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
+
+function renderClock(){
+  clockTime.textContent = fmt(total);
+  clock.classList.toggle('warn', total <= 30 && total > 10);
+  clock.classList.toggle('danger', total <= 10);
+  if (mode === 'timed') {
+    progressRight.textContent = '剩余 ' + fmt(total);
+    fill.style.width = Math.max(0, Math.min(100, total / total0 * 100)) + '%';
+  } else {
+    progressRight.textContent = '已完成 ' + Math.min(10, myScore) + ' / 10';
+    fill.style.width = Math.min(100, myScore / 10 * 100) + '%';
+  }
+}
+
+/* ---- 分数的精确加减乘除，判题与预览都复用 ---- */
+function gcd(a, b){ a = Math.abs(a); b = Math.abs(b); while (b){ [a, b] = [b, a % b]; } return a || 1; }
+function fr(n, d){ if (d < 0){ n = -n; d = -d; } const g = gcd(n, d); return { n: n / g, d: d / g }; }
+function apply(v, w, op){
+  const a = fr(v.n, v.d), b = fr(w.n, w.d);
+  if (op === '+') return fr(a.n * b.d + b.n * a.d, a.d * b.d);
+  if (op === '−') return fr(a.n * b.d - b.n * a.d, a.d * b.d);
+  if (op === '×') return fr(a.n * b.n, a.d * b.d);
+  if (op === '÷'){ if (b.n === 0) return null; return fr(a.n * b.d, a.d * b.n); }
+  return null;
+}
+const fmtVal = v => v.d === 1 ? String(v.n) : (v.n + '/' + v.d);
+
+/* ---- 一个牌组是否存在解（DFS 合并，判题口径一致） ---- */
+function solvable(nums){
+  const start = nums.map(n => ({ n, d: 1 }));
+  function dfs(list){
+    if (list.length === 1) return list[0].n === 24 && list[0].d === 1;
+    for (let i = 0; i < list.length; i++){
+      for (let j = i + 1; j < list.length; j++){
+        const rest = list.filter((_, k) => k !== i && k !== j);
+        for (const op of ['+', '−', '×', '÷']){
+          const vals = op === '−' || op === '÷'
+            ? [apply(list[i], list[j], op), apply(list[j], list[i], op)]
+            : [apply(list[i], list[j], op)];
+          for (const v of vals){
+            if (!v) continue;
+            if (dfs([...rest, v])) return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+  return dfs(start);
+}
+
+/* ---- 题面渲染 ---- */
+function exprOf(t){
+  if (!t || t.left === null) return String(t ? t.val : '');
+  const l = exprOf(t.left), r = exprOf(t.right);
+  /* 子表达式为复合式时加括号：显示永远与点击顺序一致 */
+  const wrap = (x, node) => node.left === null ? x : '(' + x + ')';
+  return wrap(l, t.left) + ' ' + t.op + ' ' + wrap(r, t.right);
+}
+
+function renderQuestion(){
+  const p = PUZZLES[puzzleIndex % PUZZLES.length];
+  tiles = p.map(n => ({ id: 't' + (tileSeq++), val: n, left: null, right: null, op: null }));
+  selected = [];
+  history = [];
+  numbersEl.innerHTML = '';
+  qno.textContent = '第 ' + questionNo + ' 题';
+  progressLabel.textContent = mode === 'timed' ? '当前第 ' + questionNo + ' 题' : '第 ' + questionNo + ' / 10 题';
+  renderTiles();
+  renderOps();
+  renderPreview();
+}
+
+function renderTiles(){
+  numbersEl.innerHTML = '';
+  tiles.forEach((t, i) => {
+    const el = document.createElement('div');
+    el.className = 'number-tile' + (t.left !== null ? ' merged' : '') + (selected.includes(t.id) ? ' selected' : '');
+    el.dataset.id = t.id;
+    el.textContent = t.left !== null ? fmtVal({ n: t.val, d: 1 }) : String(t.val);
+    if (t.left !== null) el.title = exprOf(t);
+    el.addEventListener('click', () => pickTile(t.id));
+    numbersEl.appendChild(el);
+  });
+  numbersEl.classList.toggle('single', tiles.length === 1);
+}
+
+function renderOps(){
+  opsEl.innerHTML = '';
+  LV.ops.forEach(op => {
+    const b = document.createElement('button');
+    b.className = 'op-key focus-ring';
+    b.textContent = op;
+    b.disabled = selected.length !== 2;
+    b.addEventListener('click', () => pickOp(op));
+    opsEl.appendChild(b);
+  });
+  if (LV.merge){
+    const s = document.createElement('button');
+    s.className = 'quick-key focus-ring';
+    s.textContent = '全部相加';
+    s.disabled = tiles.length !== 4;
+    s.addEventListener('click', () => autoMerge('+'));
+    opsEl.appendChild(s);
+    const m = document.createElement('button');
+    m.className = 'quick-key focus-ring';
+    m.textContent = '全部相乘';
+    m.disabled = tiles.length !== 4;
+    m.addEventListener('click', () => autoMerge('×'));
+    opsEl.appendChild(m);
+  }
+}
+
+function renderSteps(){
+  const last = history.length ? history[history.length - 1].step : null;
+  stepsEl.innerHTML = '';
+  if (!last){
+    const e = document.createElement('span');
+    e.className = 'step empty';
+    e.textContent = '等待第一步';
+    stepsEl.appendChild(e);
+  } else {
+    const e = document.createElement('span');
+    e.className = 'step';
+    e.innerHTML = '<b>' + last.l + '</b> ' + last.op + ' <b>' + last.r + '</b> = <b>' + last.res + '</b>';
+    stepsEl.appendChild(e);
+  }
+  if (tiles.length === 1){
+    const e = document.createElement('span');
+    e.className = 'step done';
+    e.textContent = '合并完成：回读为 ' + exprOf(tiles[0]);
+    stepsEl.appendChild(e);
+  }
+}
+
+let stepNote = null;
+function pushHistory(l, op, r, res){
+  history.push({ tiles: tiles.map(t => ({ ...t })), selected: [...selected], step: { l, op, r, res } });
+}
+
+function pickTile(id){
+  if (locked) return;
+  const t = tiles.find(x => x.id === id);
+  if (!t) return;
+  if (selected.includes(id)){
+    selected = selected.filter(x => x !== id);
+  } else if (selected.length < 2){
+    selected.push(id);
+  } else {
+    selected = [selected[1], id];
+  }
+  renderTiles(); renderOps(); renderPreview();
+}
+
+function pickOp(op){
+  if (locked || selected.length !== 2) return;
+  const a = tiles.find(t => t.id === selected[0]);
+  const b = tiles.find(t => t.id === selected[1]);
+  if (!a || !b) return;
+  const va = fr(a.val, 1), vb = fr(b.val, 1);
+  const res = apply(va, vb, op);
+  if (!res){
+    setFeedback('error', '不能除以 0');
+    return;
+  }
+  pushHistory(exprOf(a), op, exprOf(b), fmtVal(res));
+  const merged = { id: 'm' + (tileSeq++), val: res.n / res.d, left: a, right: b, op, frac: res };
+  const rest = tiles.filter(t => t.id !== a.id && t.id !== b.id);
+  tiles = [...rest, merged];
+  selected = [];
+  questionCard.classList.remove('correct','wrong');
+  setFeedback('', tiles.length === 1 ? '已合并成一张牌，按 Enter 或点「提交」' : '继续合并');
+  renderTiles(); renderOps(); renderSteps(); renderPreview();
+}
+
+function autoMerge(op){
+  if (locked) return;
+  let guard = 0;
+  while (tiles.length > 1 && guard++ < 8){
+    selected = [tiles[0].id, tiles[1].id];
+    pickOp(op);
+    if (selected.length === 2) { selected = []; break; }  // 非法（如除零）即停
+  }
+  selected = [];
+  renderTiles(); renderOps(); renderPreview();
+}
+
+function undo(){
+  if (locked || !history.length) return;
+  const snap = history.pop();
+  tiles = snap.tiles; selected = [];
+  setFeedback('', '已撤销一步');
+  renderTiles(); renderOps(); renderSteps(); renderPreview();
+}
+
+function renderPreview(){
+  if (tiles.length === 1){
+    exprPreview.textContent = exprOf(tiles[0]) + ' = ' + (tiles[0].frac ? fmtVal(tiles[0].frac) : tiles[0].val);
+    exprPreview.className = 'expr-preview done';
+  } else if (selected.length === 2){
+    exprPreview.textContent = '已选两张牌，选一个算符合并';
+    exprPreview.className = 'expr-preview ready';
+  } else {
+    exprPreview.textContent = '点两个数，选一个算符';
+    exprPreview.className = 'expr-preview';
+  }
+}
+
+function buildSegments(){
+  track.innerHTML = '';
+  track.style.overflow = 'visible';
+  track.style.background = 'transparent';
+  track.style.display = 'flex';
+  track.style.gap = '8px';
+  for (let i=0;i<10;i++){
+    const seg = document.createElement('div');
+    seg.style.cssText = 'flex:1;height:8px;border-radius:999px;background:#E6EAF3';
+    track.appendChild(seg);
+  }
+}
+function renderFixedProgress(done){
+  [...track.children].forEach((seg, i) => {
+    seg.style.background = i < done ? 'linear-gradient(90deg,#5B4BDB,#0F9D8A)' : '#E6EAF3';
+  });
+}
+
+function setFeedback(kind, text){
+  feedback.className = 'feedback' + (kind ? ' ' + kind : '');
+  feedback.textContent = text;
+}
+
+/* ---- 提交与冷却 ---- */
+function trySubmit(){
+  if (locked) return;
+  if (cooldown > 0){ setFeedback('error', cooldown.toFixed(1) + ' 秒后可再次提交'); return; }
+  if (tiles.length !== 1){
+    setFeedback('error', '还要再合并 ' + (tiles.length - 1) + ' 次才能提交');
+    return;
+  }
+  const v = tiles[0].frac || fr(tiles[0].val, 1);
+  setFeedback('', '判定中…');
+  setTimeout(()=>{
+    if (v.n === 24 && v.d === 1) onCorrect(); else onWrong();
+  }, 420);
+}
+
+function startCooldown(){
+  cooldown = 2.0;
+  const tick = setInterval(()=>{
+    cooldown = Math.max(0, cooldown - 0.1);
+    if (cooldown <= 0) clearInterval(tick);
+  }, 100);
+}
+function onCorrect(){
+  myScore += 1; myScoreEl.textContent = myScore;
+  questionCard.classList.add('correct');
+  setFeedback('success', '答对了，正在进入下一题');
+  locked = true;
+  if (mode === 'fixed'){
+    renderFixedProgress(myScore);
+    progressRight.textContent = '已完成 ' + Math.min(10, myScore) + ' / 10';
+  }
+  startCooldown();
+  setTimeout(()=>{
+    locked = false;
+    if (mode === 'fixed' && myScore >= MAXQ){ showWait(); return; }
+    puzzleIndex++; questionNo++;
+    questionCard.classList.remove('correct','wrong');
+    renderQuestion();
+    setFeedback('', '4 个数字各使用一次 · ' + LV.hint);
+  }, 1200);
+}
+function onWrong(){
+  questionCard.classList.add('wrong');
+  setFeedback('error', '这一组等于 ' + fmtVal(tiles[0].frac || fr(tiles[0].val,1)) + '，不是 24，撤销一步再试');
+  startCooldown();
+  setTimeout(()=>{ if (!locked) questionCard.classList.remove('wrong'); }, 1600);
+}
+if (submit) submit.addEventListener('click', trySubmit);
+$('undo').addEventListener('click', undo);
+
+document.addEventListener('keydown', e=>{
+  if (e.key === 'Enter'){ e.preventDefault(); trySubmit(); }
+  if (e.key === 'Escape'){ e.preventDefault(); undo(); }
+  if (/^[1-4]$/.test(e.key)){ const t = tiles[Number(e.key) - 1]; if (t) pickTile(t.id); }
+  if (['+','-','−','*','×','/','÷'].includes(e.key)){
+    const op = {'*':'×','/':'÷','-':'−'}[e.key] || e.key;
+    if (LV.ops.includes(op)) pickOp(op);
+  }
+  if (e.key === 'a' || e.key === 'A') autoMerge('+');
+  if (e.key === 's' || e.key === 'S') autoMerge('×');
+});
+
+/* ---- 计时 ---- */
+setInterval(()=>{
+  if (total > 0 && !$('waitCard').classList.contains('show')){
+    total--;
+    renderClock();
+    if (total === 0) closeGame();
+  }
+}, 1000);
+renderClock();
+renderQuestion();
+renderSteps();
+history = [];
+selected = [tiles[0].id, tiles[1].id];
+renderTiles(); renderOps(); renderPreview();
+
+function closeGame(){
+  locked = true;
+  setFeedback('', '已封盘');
+  location.href = '结算界面.html?result=win&mode=' + mode + '&level=' + level +
+    '&my=' + myScore + '&op=' + opScore + (capture ? '&capture=1' : '');
+}
+
+/* ---- 状态与演示 ---- */
+const overlay = $('disconnectCard');
+const waitCard = $('waitCard');
+let reconnectTimer = null;
+
+function showDisconnect(){
+  overlay.classList.add('show');
+  let left = 48;
+  $('reconnectCount').textContent = '重连剩余 ' + left + ' 秒';
+  locked = true;
+  clearInterval(reconnectTimer);
+  reconnectTimer = setInterval(()=>{
+    left--;
+    $('reconnectCount').textContent = '重连剩余 ' + Math.max(0,left) + ' 秒';
+    if (left <= 0){ clearInterval(reconnectTimer); location.href='结算界面.html?result=loss&reason=timeout' + (capture?'&capture=1':''); }
+  }, 1000);
+}
+$('reconnect').addEventListener('click', ()=>{
+  clearInterval(reconnectTimer);
+  overlay.classList.remove('show');
+  locked = false;
+});
+$('surrender').addEventListener('click', ()=>{ $('surrenderOverlay').classList.add('show'); });
+$('keepPlaying').addEventListener('click', ()=>{ $('surrenderOverlay').classList.remove('show'); });
+$('confirmSurrender').addEventListener('click', ()=>{
+  location.href = '结算界面.html?result=loss&reason=surrender' + (capture?'&capture=1':'');
+});
+
+function showWait(){
+  waitCard.classList.add('show');
+  locked = true;
+  $('waitTime').textContent = fmt(total);
+}
+setInterval(()=>{ if (waitCard.classList.contains('show')) $('waitTime').textContent = fmt(total); }, 1000);
+
+/* 对手演示：8 秒后答对本题 */
+setTimeout(()=>{
+  if (locked || waitCard.classList.contains('show')) return;
+  opScore += 1; opScoreEl.textContent = opScore;
+  opState.textContent = '本题已答对';
+  $('opCard').classList.add('warn');
+  setFeedback('opponent', '对手已答对本题，继续作答');
+  setTimeout(()=>{ if (!locked) opState.textContent = '作答中'; }, 2400);
+}, 8000);
+
+document.querySelectorAll('.devbar [data-demo]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const k = b.dataset.demo;
+    if (k === 'correct'){
+      /* 用求解器找到本题的一组解并按顺序合并，演示完整链路 */
+      const nums = PUZZLES[puzzleIndex % PUZZLES.length];
+      const plan = solvePlan(nums);
+      history = []; tiles = nums.map((n, i) => ({ id: 'd' + (i + puzzleIndex * 4), val: n, left: null, right: null, op: null }));
+      selected = [];
+      for (const st of plan){ selected = [st[0], st[1]]; pickOp(st[2]); }
+      tiles = tiles.map(t => ({ ...t }));
+      renderTiles(); renderOps(); renderPreview();
+      trySubmit();
+    }
+    if (k === 'merge'){
+      /* 按求解器给出的一组解依次合并，变成一张 24 */
+      const nums = PUZZLES[puzzleIndex % PUZZLES.length];
+      const plan = solvePlan(nums);
+      history = [];
+      tiles = nums.map((n, i) => ({ id: 'd' + (i + puzzleIndex * 4), val: n, left: null, right: null, op: null }));
+      selected = [];
+      for (const st of plan){ selected = [st[0], st[1]]; pickOp(st[2]); }
+      selected = []; renderTiles(); renderOps(); renderPreview();
+    }
+    if (k === 'wrong'){
+      const nums = PUZZLES[puzzleIndex % PUZZLES.length];
+      tiles = nums.map((n, i) => ({ id: 'w' + (i + puzzleIndex * 4), val: n, left: null, right: null, op: null }));
+      history = []; selected = [];
+      autoMerge('×'); setTimeout(trySubmit, 60);
+    }
+    if (k === 'opponent'){ opScore++; opScoreEl.textContent = opScore; opState.textContent='本题已答对'; setFeedback('opponent','对手已答对本题，继续作答'); }
+    if (k === 'disconnect'){ showDisconnect(); }
+    if (k === 'opponentDown'){ opState.textContent='对手已断线，重连剩余 48 秒'; }
+    if (k === 'wait'){ showWait(); }
+    if (k === 'finish'){ location.href='结算界面.html?result=win&mode=' + mode + '&level=' + level + '&my=' + myScore + '&op=' + opScore + (capture?'&capture=1':''); }
+    if (k === 'reset'){ location.reload(); }
+  });
+});
+
+/* 给演示用的求解：返回按顺序合并的步骤 [[idA, idB, op], ...] */
+function solvePlan(nums){
+  const ids = nums.map((_, i) => 'd' + (i + puzzleIndex * 4));
+  function dfs(list){   // list: [{id, v:{n,d}}]
+    if (list.length === 1) return (list[0].v.n === 24 && list[0].v.d === 1) ? [] : null;
+    for (let i = 0; i < list.length; i++){
+      for (let j = i + 1; j < list.length; j++){
+        for (const op of ['+','−','×','÷','+','−','×','÷']){
+          const flip = ['+','−','×','÷'].indexOf(op) >= 4;
+          const a = flip ? list[j] : list[i], b = flip ? list[i] : list[j];
+          const v = apply(a.v, b.v, op);
+          if (!v) continue;
+          const rest = list.filter((_, k) => k !== i && k !== j);
+          const nid = a.id + '|' + b.id;
+          const sub = dfs([...rest, { id: nid, v }]);
+          if (sub) return [[a.id, b.id, op], ...sub.map(s => [s[0].replace(a.id, nid).replace(b.id, nid), s[1].replace(a.id, nid).replace(b.id, nid), s[2]])];
+        }
+      }
+    }
+    return null;
+  }
+  return dfs(ids.map((id, k) => ({ id, v: fr(nums[k], 1) }))) || [];
+}
+</script>
+</body>
+</html>

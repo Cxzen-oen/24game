@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: game24
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:55432/game24}
+    username: ${DB_USERNAME:game24}
+    password: ${DB_PASSWORD:game24_local_only}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: 2
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  tomcat:
+    threads:
+      max: ${TOMCAT_MAX_THREADS:50}
+    accept-count: 100
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/css,application/javascript,image/svg+xml
+  # 生产环境在反向代理后面时设为 framework，getRemoteAddr() 才会取 X-Forwarded-For
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+game24:
+  a-duration-ms: 300000
+  b-target-correct: 10
+  wrong-penalty-ms: 5000
+  skip-penalty-ms: 10000
+  auth:
+    # 生产必须通过环境变量覆盖：>= 32 字节随机串
+    jwt-secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef}
+    issuer: game24
+    access-ttl: ${ACCESS_TTL:PT30M}
+    refresh-ttl: ${REFRESH_TTL:P30D}
+    # HTTPS 部署时置 true；纯 IP + HTTP 调试时为 false
+    cookie-secure: ${COOKIE_SECURE:false}
+
+logging:
+  level:
+    root: INFO
+    com.game24: INFO

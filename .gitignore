@@ -1,0 +1,33 @@
+# secrets
+.env
+.env.*
+!.env.example
+!.env.prod.example
+backups/
+*.pem
+*.key
+
+# build outputs and dependencies
+target/
+node_modules/
+dist/
+.build/
+deploy/build/
+demo/server/src/main/resources/static/
+demo/web/target-smoke/
+.m2repo/
+.preview/
+.review/
+
+# OS / editor
+nul
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/
+# generated test / preview artifacts
+coverage/
+__pycache__/
+*.pyc
+demo/web/.serve/
+report_preview.docx

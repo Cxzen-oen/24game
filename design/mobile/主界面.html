@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>24点双人对战 · 移动端主界面</title>
+<link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+<div class="screen main">
+  <header class="topbar">
+    <div class="logo">24</div>
+    <div class="brand">24点双人对战</div>
+    <div class="right">实时对战</div>
+  </header>
+
+  <section class="hero">
+    <h1>同一组数字，<br>谁先算到 24</h1>
+    <p>2 人对战。同题同序，各自作答，答案互不可见。</p>
+  </section>
+
+  <div class="levels" role="radiogroup" aria-label="选择难度">
+    <div class="level" data-level="l1" role="radio" tabindex="0" aria-checked="false"><b>加减级</b><span>仅 + −</span></div>
+    <div class="level selected" data-level="l2" role="radio" tabindex="0" aria-checked="true"><b>四则级</b><span>+ − × ÷</span></div>
+    <div class="level" data-level="l3" role="radio" tabindex="0" aria-checked="false"><b>扩展级</b><span>幂 · 开方 · 阶乘</span></div>
+  </div>
+
+  <div class="modes">
+    <div class="mode selected" data-mode="timed" role="button" tabindex="0" aria-pressed="true">
+      <div class="h"><b>限时赛</b><span class="pill">已选择</span></div>
+      <div class="cfg">限时内答对更多题</div>
+      <div class="desc">题数相同，比最后一次正确提交的累计用时。</div>
+      <div class="seg" data-for="timed">
+        <button class="seg-btn" data-secs="90">90 秒</button>
+        <button class="seg-btn selected" data-secs="180">180 秒</button>
+        <button class="seg-btn" data-secs="300">300 秒</button>
+      </div>
+      <div class="seg-note" id="timedNote">预估可作答 9 题左右</div>
+    </div>
+    <div class="mode" data-mode="fixed" role="button" tabindex="0" aria-pressed="false">
+      <div class="h"><b>定题赛</b><span class="pill">已选择</span></div>
+      <div class="cfg">固定题数，比谁更快完成</div>
+      <div class="desc">先比完成数，再比最后一次正确提交的累计用时。</div>
+      <div class="seg" data-for="fixed">
+        <button class="seg-btn" data-count="5">5 题</button>
+        <button class="seg-btn selected" data-count="10">10 题</button>
+        <button class="seg-btn" data-count="20">20 题</button>
+      </div>
+      <div class="seg-note" id="fixedNote">预计用时 3 分 20 秒 · 最长 600 秒</div>
+    </div>
+  </div>
+
+  <div class="rule" id="rule">每题 4 个数字 · 各用一次<br>点两个数 + 一个算符合并，括号自动</div>
+
+  <div class="recent">
+    <h4>最近对局</h4>
+    <div class="row"><span class="d">10-25 16:42</span><span class="m">限时赛</span><span class="w">胜</span><span class="r">答对 8 题</span></div>
+    <div class="row"><span class="d">10-24 20:15</span><span class="m">定题赛</span><span class="l">负</span><span class="r">用时 3:02</span></div>
+  </div>
+
+  <div class="cta inline"><div class="inner"><button class="btn btn-primary" id="start">立即匹配</button></div></div>
+</div>
+
+<script>
+const LV = {
+  l1:'每题 4 个数字 · 各用一次<br>只能点 + 与 −，括号自动',
+  l2:'每题 4 个数字 · 各用一次<br>四则合并，括号自动',
+  l3:'每题 4 个数字 · 各用一次<br>四则合并；扩展运算在作答页展开'
+};
+let level = 'l2', mode = 'timed';
+let secs = 180, fixedCount = 10;
+const PER_Q = 20;
+const timedNote = document.getElementById('timedNote');
+const fixedNote = document.getElementById('fixedNote');
+function renderDurations(){
+  timedNote.textContent = '预估可作答 ' + Math.floor(secs / PER_Q) + ' 题左右';
+  fixedNote.textContent = '预计用时 ' + Math.floor(fixedCount * PER_Q / 60) + ' 分 ' + String(fixedCount * PER_Q % 60).padStart(2, '0') + ' 秒 · 最长 600 秒';
+  document.querySelectorAll('[data-for="timed"] .seg-btn').forEach(b => b.classList.toggle('selected', Number(b.dataset.secs) === secs));
+  document.querySelectorAll('[data-for="fixed"] .seg-btn').forEach(b => b.classList.toggle('selected', Number(b.dataset.count) === fixedCount));
+}
+document.querySelectorAll('.seg-btn').forEach(b => {
+  b.addEventListener('click', e => {
+    e.stopPropagation();
+    if (b.dataset.secs){ secs = Number(b.dataset.secs); pickMode('timed'); }
+    if (b.dataset.count){ fixedCount = Number(b.dataset.count); pickMode('fixed'); }
+    renderDurations();
+  });
+});
+renderDurations();
+const levels = [...document.querySelectorAll('.level')];
+const modes = [...document.querySelectorAll('.mode')];
+const rule = document.getElementById('rule');
+
+function pickLevel(l){
+  level = l;
+  levels.forEach(x=>{
+    const on = x.dataset.level === l;
+    x.classList.toggle('selected', on);
+    x.setAttribute('aria-checked', String(on));
+  });
+  rule.innerHTML = LV[l];
+}
+function pickMode(m){
+  mode = m;
+  modes.forEach(x=>{
+    const on = x.dataset.mode === m;
+    x.classList.toggle('selected', on);
+    x.setAttribute('aria-pressed', String(on));
+  });
+}
+levels.forEach(x=>x.addEventListener('click', ()=>pickLevel(x.dataset.level)));
+modes.forEach(x=>x.addEventListener('click', ()=>pickMode(x.dataset.mode)));
+document.getElementById('start').addEventListener('click', ()=>{
+  location.href = '对战界面.html?mode=' + mode + '&level=' + level +
+    (mode === 'timed' ? '&secs=' + secs : '&count=' + fixedCount);
+});
+</script>
+</body>
+</html>

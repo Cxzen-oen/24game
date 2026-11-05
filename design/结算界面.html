@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>24点双人对战 · 结算页</title>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div class="stage">
+  <header class="header">
+    <div class="logo">24</div>
+    <div class="brand">24点双人对战</div>
+    <div class="tag" id="modeTag">限时赛</div>
+  </header>
+
+  <h1 class="result-title win" id="resultTitle">胜利</h1>
+  <p class="result-reason" id="resultReason">答对题数更多</p>
+
+  <section class="result-panel">
+    <div class="result-grid">
+      <div>
+        <div class="who">你</div>
+        <div class="cell"><div class="metric">答对题数</div><div class="val mono" id="myScore">8 题</div></div>
+        <div class="result-sep"></div>
+        <div class="cell"><div class="metric">最后正确提交累计用时</div><div class="val mono" id="myLast">02:41</div></div>
+        <div class="result-sep"></div>
+        <div class="cell"><div class="metric">比赛总用时</div><div class="val mono" id="myTotal">03:00</div></div>
+      </div>
+      <div>
+        <div class="metric">判定依据</div>
+        <div class="val" style="margin-top:16px;font-size:18px;line-height:28px" id="basis">按答对题数</div>
+      </div>
+      <div>
+        <div class="who">对手</div>
+        <div class="cell"><div class="metric">答对题数</div><div class="val mono" id="opScore">7 题</div></div>
+        <div class="result-sep"></div>
+        <div class="cell"><div class="metric">最后正确提交累计用时</div><div class="val mono" id="opLast">03:05</div></div>
+        <div class="result-sep"></div>
+        <div class="cell"><div class="metric">比赛总用时</div><div class="val mono" id="opTotal">03:00</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="record" id="record">你的定题赛最快纪录已更新：02:41</div>
+  <div id="cumulative" style="position:absolute;left:360px;top:664px;width:720px;height:40px;border-radius:12px;background:#F5F2FF;
+    border:1px solid #D9D2F5;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--primary)">
+    累计答对 1,289 题 · 持续累积，只看自己进步
+  </div>
+
+  <div class="result-actions">
+    <button class="btn btn-primary focus-ring" id="again">再来一局</button>
+    <button class="btn btn-ghost focus-ring" id="home">返回首页</button>
+  </div>
+</div>
+
+<div class="devbar">
+  <b>原型演示</b>
+  <a href="结算界面.html?result=win">胜利</a>
+  <a href="结算界面.html?result=loss&reason=timeout">失败</a>
+  <a href="结算界面.html?result=draw">平局</a>
+  <a href="结算界面.html?result=invalid">无效</a>
+  <a href="对战界面.html">回对战页</a>
+</div>
+
+<script>
+const p = new URLSearchParams(location.search);
+const capture = p.has('capture');
+if (capture) document.body.classList.add('capture');
+const result = p.get('result') || 'win';
+const reason = p.get('reason') || '';
+const mode = p.get('mode') === 'fixed' ? 'fixed' : 'timed';
+const my = p.get('my') || '8', op = p.get('op') || '7';
+const $ = id => document.getElementById(id);
+
+$('modeTag').textContent = (mode === 'timed' ? '限时赛' : '定题赛') + (p.get('level') ? ' · ' + ({l1:'加减级',l2:'四则级',l3:'扩展级'}[p.get('level')] || '') : '');
+$('myScore').textContent = my + ' 题';
+$('opScore').textContent = op + ' 题';
+
+const reasonMap = {
+  win: {cls:'win', title:'胜利', reason:'答对题数更多', basis:'按答对题数'},
+  loss: {cls:'loss', title:'你输了', reason:'答对题数较少', basis:'按答对题数'},
+  draw: {cls:'neutral', title:'平局', reason:'答对题数和最后正确提交累计用时均相同', basis:'成绩完全相同'},
+  invalid: {cls:'neutral', title:'本局无效', reason:'双方均掉线，本局无效', basis:'比赛无效'}
+};
+if (reason === 'timeout') Object.assign(reasonMap.loss, {reason:'你断线超时', basis:'断线判负'});
+if (reason === 'surrender') Object.assign(reasonMap.loss, {reason:'你已弃权', basis:'弃权判负'});
+const conf = reasonMap[result] || reasonMap.win;
+$('resultTitle').className = 'result-title ' + conf.cls;
+$('resultTitle').textContent = conf.title;
+$('resultReason').textContent = conf.reason;
+$('basis').textContent = conf.basis;
+
+const record = $('record');
+const cum = document.getElementById('cumulative');
+if (cum) cum.textContent = '累计答对 1,284 + ' + my + ' = ' + (1284 + Number(my)) + ' 题 · 持续累积，只看自己进步';
+if (mode === 'timed') record.textContent = '限时赛不更新定题赛最快纪录';
+else if (result === 'win' && Number(my) === 10) record.textContent = '你的定题赛最快纪录已更新：08:12';
+else record.textContent = '你的定题赛最快纪录：08:12';
+
+$('again').addEventListener('click', ()=>{ location.href = '主界面.html'; });
+$('home').addEventListener('click', ()=>{ location.href = '主界面.html'; });
+</script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>24点双人对战 · 移动端对战页</title>
+<link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+<div class="screen">
+  <header class="topbar">
+    <div class="logo">24</div>
+    <div class="brand">24点双人对战</div>
+    <div class="right" id="modeLabel">限时赛 · 四则级</div>
+  </header>
+
+  <section class="match">
+    <div class="pcard me">
+      <div class="who">你 <b id="myScore">5</b></div>
+      <div class="state"><span class="dot"></span><span>作答中</span></div>
+    </div>
+    <div class="pcard opponent">
+      <div class="who">对手 <b id="opScore">4</b></div>
+      <div class="state"><span class="dot"></span><span id="opState">作答中</span></div>
+    </div>
+  </section>
+
+  <div class="clock" id="clock">
+    <div class="m" id="clockMode">限时赛</div>
+    <div class="t" id="clockTime">02:41</div>
+  </div>
+
+  <div class="progress">
+    <span id="qLabel">第 6 题</span>
+    <div class="bar"><div class="fill" id="fill"></div></div>
+    <span class="mono" id="pRight">02:41</span>
+  </div>
+
+  <section class="qcard" id="qcard">
+    <div class="qno" id="qno">第 6 题</div>
+    <div class="tiles" id="tiles"></div>
+    <div class="qhint" id="qhint">4 个数字各使用一次</div>
+  </section>
+
+  <div class="ops" id="ops"></div>
+
+  <div class="preview" id="preview">点两个数，选一个算符</div>
+  <div class="feedback" id="feedback">点选两张牌再选算符，括号由点击顺序决定</div>
+
+  <div class="under">
+    <button id="undo">撤销</button>
+    <button class="submit" id="submit">提交</button>
+    <button id="surrender">弃权</button>
+  </div>
+
+  <div class="rules">
+    <b>本场规则</b>
+    不可跳题 · 答错可重试，不扣分 · 断线保留 60 秒，计时继续
+  </div>
+</div>
+
+<div class="devbar">
+  <b>演示</b>
+  <button data-d="correct">正确（自动合并）</button>
+  <button data-d="wrong">凑不出 24</button>
+  <button data-d="opponent">对手先答对</button>
+  <a href="主界面.html">回主界面</a>
+</div>
+
+<script>
+const p = new URLSearchParams(location.search);
+const mode = p.get('mode') === 'fixed' ? 'fixed' : 'timed';
+const level = ['l1','l2','l3'].includes(p.get('level')) ? p.get('level') : 'l2';
+const secs = [90, 180, 300].includes(Number(p.get('secs'))) ? Number(p.get('secs')) : 180;
+if (p.has('capture')) document.body.classList.add('capture');
+
+/* 移动端同样使用点牌合并：点两个数 + 一个算符，中间结果并成一张牌，括号由点击顺序决定 */
+const LV = {
+  l1: {name:'加减级', ops:['+','−'], hint:'点两个数，再点 + 或 −'},
+  l2: {name:'四则级', ops:['+','−','×','÷'], hint:'点两个数，再点 + − × ÷'},
+  l3: {name:'扩展级', ops:['+','−','×','÷'], hint:'先合并成两张牌，再按扩展规则运算'}
+}[level];
+
+const PUZZLES = {
+  l1:[[8,9,5,2],[11,9,2,2],[13,7,3,1],[6,8,9,1]],
+  l2:[[5,6,7,8],[3,3,8,8],[1,5,5,5],[9,10,4,7]],
+  l3:[[1,2,3,4],[2,3,4,6],[3,3,3,3],[4,4,4,4]]
+}[level];
+
+let idx = 0, qno = 6, my = 5, op = 4;
+let total = mode === 'timed' ? secs - 19 : 545;
+let total0 = mode === 'timed' ? secs : 600;
+let cooldown = 0, locked = false;
+
+let tiles = [], selected = [], history = [], tileSeq = 0;
+
+const $ = id => document.getElementById(id);
+const feedback = $('feedback'), qcard = $('qcard'), preview = $('preview'), opsEl = $('ops');
+const clock = $('clock'), clockTime = $('clockTime');
+
+$('modeLabel').textContent = (mode === 'timed' ? '限时赛 · ' + fmt(secs) : '定题赛') + ' · ' + LV.name;
+$('clockMode').textContent = mode === 'timed' ? '限时赛' : '定题赛';
+
+function fmt(s){ s = Math.max(0, Math.floor(s)); return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); }
+function renderClock(){
+  clockTime.textContent = fmt(total);
+  clock.classList.toggle('warn', total <= 30 && total > 10);
+  clock.classList.toggle('danger', total <= 10);
+  $('pRight').textContent = mode === 'timed' ? fmt(total) : (my + '/10');
+  if (mode === 'timed') $('fill').style.width = Math.max(0, total / total0 * 100) + '%';
+  else $('fill').style.width = Math.min(100, my / 10 * 100) + '%';
+}
+
+function gcd(a, b){ a = Math.abs(a); b = Math.abs(b); while (b){ [a, b] = [b, a % b]; } return a || 1; }
+function fr(n, d){ if (d < 0){ n = -n; d = -d; } const g = gcd(n, d); return { n: n / g, d: d / g }; }
+function apply(v, w, o){
+  const a = fr(v.n, v.d), b = fr(w.n, w.d);
+  if (o === '+') return fr(a.n * b.d + b.n * a.d, a.d * b.d);
+  if (o === '−') return fr(a.n * b.d - b.n * a.d, a.d * b.d);
+  if (o === '×') return fr(a.n * b.n, a.d * b.d);
+  if (o === '÷') return b.n === 0 ? null : fr(a.n * b.d, a.d * b.n);
+  return null;
+}
+const fmtVal = v => v.d === 1 ? String(v.n) : (v.n + '/' + v.d);
+function exprOf(t){
+  if (!t || t.left === null) return String(t ? t.val : '');
+  const wrap = (x, node) => node.left === null ? x : '(' + x + ')';
+  return wrap(exprOf(t.left), t.left) + ' ' + t.op + ' ' + wrap(exprOf(t.right), t.right);
+}
+
+function render(){
+  const nums = PUZZLES[idx % PUZZLES.length];
+  tiles = nums.map(n => ({ id: 't' + (tileSeq++), val: n, left: null, right: null, op: null }));
+  selected = []; history = [];
+  $('qno').textContent = '第 ' + qno + ' 题';
+  $('qLabel').textContent = mode === 'timed' ? '第 ' + qno + ' 题' : qno + ' / 10';
+  $('qhint').textContent = '4 个数字各使用一次 · ' + LV.hint;
+  renderTiles(); renderOps(); renderPreview();
+}
+function renderTiles(){
+  const box = $('tiles');
+  box.innerHTML = '';
+  tiles.forEach(t => {
+    const d = document.createElement('div');
+    d.className = 'tile' + (t.left !== null ? ' merged' : '') + (selected.includes(t.id) ? ' selected' : '');
+    d.textContent = t.left !== null ? fmtVal({ n: t.val, d: 1 }) : String(t.val);
+    d.addEventListener('click', () => pickTile(t.id));
+    box.appendChild(d);
+  });
+  box.classList.toggle('single', tiles.length === 1);
+}
+function renderOps(){
+  opsEl.innerHTML = '';
+  LV.ops.forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'op' + (selected.length === 2 ? ' ready' : '');
+    b.textContent = o;
+    b.disabled = selected.length !== 2;
+    b.addEventListener('click', () => pickOp(o));
+    opsEl.appendChild(b);
+  });
+}
+function renderPreview(){
+  if (tiles.length === 1){
+    preview.textContent = exprOf(tiles[0]) + ' = ' + fmtVal({ n: tiles[0].val, d: 1 });
+    preview.className = 'preview done';
+  } else if (selected.length === 2){
+    preview.textContent = '已选两张牌，选一个算符';
+    preview.className = 'preview ready';
+  } else {
+    preview.textContent = '点两个数，选一个算符';
+    preview.className = 'preview';
+  }
+}
+function pickTile(id){
+  if (locked) return;
+  if (selected.includes(id)) selected = selected.filter(x => x !== id);
+  else if (selected.length < 2) selected.push(id);
+  else selected = [selected[1], id];
+  renderTiles(); renderOps(); renderPreview();
+}
+function pickOp(o){
+  if (locked || selected.length !== 2) return;
+  const a = tiles.find(t => t.id === selected[0]), b = tiles.find(t => t.id === selected[1]);
+  if (!a || !b) return;
+  const res = apply(fr(a.val, 1), fr(b.val, 1), o);
+  if (!res){ setFb('error', '不能除以 0'); return; }
+  history.push({ tiles: tiles.map(t => ({ ...t })) });
+  const merged = { id: 'm' + (tileSeq++), val: res.n / res.d, left: a, right: b, op: o };
+  tiles = [...tiles.filter(t => t.id !== a.id && t.id !== b.id), merged];
+  selected = [];
+  qcard.classList.remove('correct','wrong');
+  setFb('', tiles.length === 1 ? '已合并成一张牌，点「提交」' : '继续合并');
+  renderTiles(); renderOps(); renderPreview();
+}
+function undo(){
+  if (locked || !history.length) return;
+  tiles = history.pop().tiles; selected = [];
+  setFb('', '已撤销一步');
+  renderTiles(); renderOps(); renderPreview();
+}
+function setFb(kind, text){ feedback.className = 'feedback ' + kind; feedback.textContent = text; }
+
+function submit(){
+  if (locked || cooldown > 0) return;
+  if (tiles.length !== 1){ setFb('error', '还要再合并 ' + (tiles.length - 1) + ' 次才能提交'); return; }
+  const v = fr(tiles[0].val, 1);
+  $('submit').textContent = '判定中…';
+  setTimeout(()=>{
+    if (v.n === 24 && v.d === 1) correct(); else wrong(v);
+  }, 380);
+}
+function cooldownStart(){
+  cooldown = 2;
+  const t = setInterval(()=>{
+    cooldown = Math.max(0, cooldown - 0.1);
+    if (cooldown <= 0){ clearInterval(t); if (!locked) $('submit').textContent = '提交'; }
+  }, 100);
+}
+function correct(){
+  my++; $('myScore').textContent = my;
+  qcard.classList.add('correct');
+  setFb('success', '答对了，正在进入下一题');
+  locked = true;
+  if (mode === 'fixed') $('pRight').textContent = my + '/10';
+  cooldownStart();
+  setTimeout(()=>{
+    locked = false;
+    idx++; qno++; render(); setFb('', '点选两张牌再选算符');
+    $('submit').textContent = '提交';
+  }, 1200);
+}
+function wrong(v){
+  qcard.classList.add('wrong');
+  setFb('error', '这一组等于 ' + fmtVal(v) + '，不是 24，撤销一步再试');
+  $('submit').textContent = '提交';
+  cooldownStart();
+  setTimeout(()=>{ if (!locked) qcard.classList.remove('wrong'); }, 1500);
+}
+$('submit').addEventListener('click', submit);
+$('undo').addEventListener('click', undo);
+$('surrender').addEventListener('click', ()=>{
+  location.href = '结算界面.html?result=loss&reason=surrender&level=' + level;
+});
+
+setInterval(()=>{
+  if (total > 0){
+    total--; renderClock();
+    if (total === 0) location.href = '结算界面.html?result=win&mode=' + mode + '&level=' + level + '&my=' + my + '&op=' + op;
+  }
+}, 1000);
+
+document.querySelectorAll('.devbar [data-d]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const nums = PUZZLES[idx % PUZZLES.length];
+    if (b.dataset.d === 'correct'){
+      const plan = solvePlan(nums);
+      tiles = nums.map((n, i) => ({ id: 'd' + (i + idx * 4), val: n, left: null, right: null, op: null }));
+      selected = []; history = [];
+      for (const st of plan){ selected = [st[0], st[1]]; pickOp(st[2]); }
+      selected = []; renderTiles(); renderOps(); renderPreview();
+      submit();
+    }
+    if (b.dataset.d === 'wrong'){
+      tiles = nums.map((n, i) => ({ id: 'w' + (i + idx * 4), val: n, left: null, right: null, op: null }));
+      selected = []; history = [];
+      selected = [tiles[0].id, tiles[1].id]; pickOp('×');
+      selected = [tiles[0].id, tiles[1].id]; pickOp('×');
+      selected = [tiles[0].id, tiles[1].id]; pickOp('×');
+      selected = []; renderTiles(); renderOps(); renderPreview();
+      submit();
+    }
+    if (b.dataset.d === 'opponent'){ op++; $('opScore').textContent = op; $('opState').textContent='本题已答对'; setFb('opponent','对手已答对本题，继续作答'); }
+  });
+});
+
+function solvePlan(nums){
+  const ids = nums.map((_, i) => 'd' + (i + idx * 4));
+  function dfs(list){
+    if (list.length === 1) return (list[0].v.n === 24 && list[0].v.d === 1) ? [] : null;
+    for (let i = 0; i < list.length; i++){
+      for (let j = i + 1; j < list.length; j++){
+        for (const o of ['+','−','×','÷']){
+          for (const [a, b] of [[list[i], list[j]], [list[j], list[i]]]){
+            const v = apply(a.v, b.v, o);
+            if (!v) continue;
+            const rest = list.filter((_, k) => k !== i && k !== j);
+            const nid = a.id + '|' + b.id;
+            const sub = dfs([...rest, { id: nid, v }]);
+            if (sub) return [[a.id, b.id, o], ...sub.map(s => [s[0].replace(a.id, nid).replace(b.id, nid), s[1].replace(a.id, nid).replace(b.id, nid), s[2]])];
+          }
+        }
+      }
+    }
+    return null;
+  }
+  return dfs(ids.map((id, k) => ({ id, v: fr(nums[k], 1) }))) || [];
+}
+
+render();
+renderClock();
+</script>
+</body>
+</html>

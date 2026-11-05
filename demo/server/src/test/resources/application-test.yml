@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://127.0.0.1:5432/game24?currentSchema=game24_test}
+    username: ${TEST_DB_USERNAME:game24}
+    password: ${TEST_DB_PASSWORD:game24_local_only}
+  flyway:
+    default-schema: game24_test
+    schemas: game24_test
+    create-schemas: true
+game24:
+  auth:
+    jwt-secret: test-only-secret-0123456789abcdef0123456789abcdef
+    cookie-secure: false

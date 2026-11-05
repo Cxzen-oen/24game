@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>24点双人对战 · 主界面</title>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div class="stage">
+  <header class="header">
+    <div class="logo">24</div>
+    <div class="brand">24点双人对战</div>
+    <div class="tag">网页实时对战</div>
+  </header>
+
+  <section class="hero">
+    <h1>同一组数字，<br>谁先算到 24</h1>
+    <p>2 人对战。同题同序，各自作答，答案互不可见。</p>
+    <div class="digits">
+      <div class="digit">5</div>
+      <div class="digit">6</div>
+      <div class="digit">7</div>
+      <div class="digit">8</div>
+    </div>
+  </section>
+
+  <div class="levels" role="radiogroup" aria-label="选择难度">
+    <div class="level" data-level="l1" role="radio" tabindex="0" aria-checked="false">
+      <div class="nm">加减级</div>
+      <div class="op">仅 + − 与括号</div>
+    </div>
+    <div class="level selected" data-level="l2" role="radio" tabindex="0" aria-checked="true">
+      <div class="nm">四则级</div>
+      <div class="op">+ − × ÷ 与括号</div>
+    </div>
+    <div class="level" data-level="l3" role="radio" tabindex="0" aria-checked="false">
+      <div class="nm">扩展级</div>
+      <div class="op">四则 + 幂、开方、阶乘</div>
+    </div>
+  </div>
+
+  <div class="mode-card selected" data-mode="timed" style="top:272px" role="button" tabindex="0" aria-pressed="true">
+    <div class="head"><h2>限时赛</h2><span class="pill">已选择</span></div>
+    <div class="config">答对题数多者胜，比的是速度与准确率</div>
+    <div class="desc">限时内答对更多题。题数相同，比较最后一次正确提交的累计用时。</div>
+    <div class="seg" role="radiogroup" aria-label="限时赛时长" data-for="timed">
+      <button class="seg-btn" data-secs="90" role="radio" aria-checked="false">90 秒</button>
+      <button class="seg-btn selected" data-secs="180" role="radio" aria-checked="true">180 秒</button>
+      <button class="seg-btn" data-secs="300" role="radio" aria-checked="false">300 秒</button>
+      <span class="seg-note" id="timedNote">按每题约 20 秒估算，可作答 9 题左右</span>
+    </div>
+  </div>
+
+  <div class="mode-card" data-mode="fixed" style="top:472px" role="button" tabindex="0" aria-pressed="false">
+    <div class="head"><h2>定题赛</h2><span class="pill">已选择</span></div>
+    <div class="config">固定 10 题，比谁更快完成</div>
+    <div class="desc">完成 10 题，比较答对题数与最后正确提交累计用时。</div>
+    <div class="seg" role="radiogroup" aria-label="定题赛每次出题数" data-for="fixed">
+      <button class="seg-btn" data-count="5" role="radio" aria-checked="false">5 题</button>
+      <button class="seg-btn selected" data-count="10" role="radio" aria-checked="true">10 题</button>
+      <button class="seg-btn" data-count="20" role="radio" aria-checked="false">20 题</button>
+      <span class="seg-note" id="fixedNote">预计用时 3 分 20 秒 · 最长 600 秒</span>
+    </div>
+  </div>
+
+  <div class="rule-summary" id="ruleSummary">每题 4 个数字 · 每个数字使用一次<br>仅可输入 + − × ÷ 与括号</div>
+  <button class="btn btn-primary start-btn focus-ring" id="start">立即匹配</button>
+  <div class="footer">服务端判定答案 · 断线保留 60 秒 · 弃权需二次确认　|　累计答对 <b style="color:var(--text);font-family:var(--num)">1,284</b> 题 · 限时赛最佳 <b style="color:var(--text);font-family:var(--num)">14</b> 题</div>
+</div>
+
+<div class="overlay" id="matchOverlay">
+  <div class="modal">
+    <h3 id="matchTitle">正在匹配对手</h3>
+    <p id="matchDesc">模式：限时赛 · 同题同序 · 双方就绪后立即开始</p>
+    <div class="count mono" id="matchCount">--</div>
+    <div class="actions">
+      <button class="btn btn-ghost" id="cancelMatch" style="height:56px;padding:0 32px">取消匹配</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const capture = new URLSearchParams(location.search).has('capture');
+if (capture) document.body.classList.add('capture');
+
+const LEVELS = {
+  l1: {name: '加减级', ops: '仅 + − 与括号', rule: '每题 4 个数字 · 每个数字使用一次<br>仅可输入 + − 与括号'},
+  l2: {name: '四则级', ops: '+ − × ÷ 与括号', rule: '每题 4 个数字 · 每个数字使用一次<br>仅可输入 + − × ÷ 与括号'},
+  l3: {name: '扩展级', ops: '四则 + 幂、开方、阶乘', rule: '每题 4 个数字 · 每个数字使用一次<br>四则 + 幂、开方、阶乘与括号'}
+};
+let level = 'l2', mode = 'timed';
+let secs = 180;          // 限时赛时长
+let fixedCount = 10;     // 定题赛题数
+const PER_Q = 20;        // 每题预估秒数（用于显示预估总时长）
+
+const cards = [...document.querySelectorAll('.mode-card')];
+const levels = [...document.querySelectorAll('.level')];
+const summary = document.getElementById('ruleSummary');
+
+function selectMode(m){
+  mode = m;
+  cards.forEach(c=>{
+    const on = c.dataset.mode === m;
+    c.classList.toggle('selected', on);
+    c.setAttribute('aria-pressed', String(on));
+  });
+}
+function selectLevel(l){
+  level = l;
+  levels.forEach(c=>{
+    const on = c.dataset.level === l;
+    c.classList.toggle('selected', on);
+    c.setAttribute('aria-checked', String(on));
+  });
+  summary.innerHTML = LEVELS[l].rule;
+}
+
+cards.forEach(c=>{
+  c.addEventListener('click', ()=>selectMode(c.dataset.mode));
+  c.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectMode(c.dataset.mode); }});
+});
+levels.forEach(c=>{
+  c.addEventListener('click', ()=>selectLevel(c.dataset.level));
+  c.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectLevel(c.dataset.level); }});
+});
+
+/* 时长 / 题数预设：显示「预估总时长」，让匹配前就知道要打多久 */
+const fmtDur = s => {
+  s = Math.round(s);
+  return Math.floor(s / 60) + ' 分 ' + String(s % 60).padStart(2, '0') + ' 秒';
+};
+const timedNote = document.getElementById('timedNote');
+const fixedNote = document.getElementById('fixedNote');
+function renderDurations(){
+  timedNote.textContent = '按每题约 ' + PER_Q + ' 秒估算，可作答 ' + Math.floor(secs / PER_Q) + ' 题左右';
+  fixedNote.textContent = '预计用时 ' + fmtDur(fixedCount * PER_Q) + '（' + fixedCount + ' 题）';
+  document.querySelectorAll('[data-for="timed"] .seg-btn').forEach(b => {
+    const on = Number(b.dataset.secs) === secs;
+    b.classList.toggle('selected', on); b.setAttribute('aria-checked', String(on));
+  });
+  document.querySelectorAll('[data-for="fixed"] .seg-btn').forEach(b => {
+    const on = Number(b.dataset.count) === fixedCount;
+    b.classList.toggle('selected', on); b.setAttribute('aria-checked', String(on));
+  });
+}
+document.querySelectorAll('.seg-btn').forEach(b => {
+  b.addEventListener('click', e => {
+    e.stopPropagation();                    // 点预设不触发整张卡片的「选择模式」
+    if (b.dataset.secs){ secs = Number(b.dataset.secs); selectMode('timed'); }
+    if (b.dataset.count){ fixedCount = Number(b.dataset.count); selectMode('fixed'); }
+    renderDurations();
+  });
+});
+renderDurations();
+
+const overlay = document.getElementById('matchOverlay');
+const count = document.getElementById('matchCount');
+const title = document.getElementById('matchTitle');
+const desc = document.getElementById('matchDesc');
+let t1, t2;
+
+document.getElementById('start').addEventListener('click', ()=>{
+  overlay.classList.add('show');
+  title.textContent = '正在匹配对手';
+  desc.textContent = (mode === 'timed'
+      ? '模式：限时赛 ' + secs + ' 秒 · 预估作答 ' + Math.floor(secs / PER_Q) + ' 题'
+      : '模式：定题赛 ' + fixedCount + ' 题 · 预计用时 ' + fmtDur(fixedCount * PER_Q))
+    + ' · ' + LEVELS[level].name + ' · 同题同序';
+  count.textContent = '--';
+  t1 = setTimeout(()=>{
+    title.textContent = '匹配成功';
+    let n = 3;
+    count.textContent = n;
+    t2 = setInterval(()=>{
+      n -= 1;
+      if (n <= 0){
+        clearInterval(t2);
+        location.href = '对战界面.html?mode=' + mode + '&level=' + level +
+          (mode === 'timed' ? '&secs=' + secs : '&count=' + fixedCount) + (capture ? '&capture=1' : '');
+      } else {
+        count.textContent = n;
+      }
+    }, 1000);
+  }, 1800);
+});
+
+document.getElementById('cancelMatch').addEventListener('click', ()=>{
+  clearTimeout(t1); clearInterval(t2);
+  overlay.classList.remove('show');
+  count.textContent = '--';
+});
+</script>
+</body>
+</html>

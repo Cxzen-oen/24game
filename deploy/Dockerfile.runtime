@@ -1,0 +1,10 @@
+# 2C2G 推荐：本地/CI 先构建好 jar，再在服务器上做一次很轻的镜像构建
+# 用法：APP_DOCKERFILE=deploy/Dockerfile.runtime docker compose ... up -d --build
+FROM eclipse-temurin:21-jre-alpine
+RUN addgroup -S app && adduser -S -G app app
+WORKDIR /app
+COPY deploy/build/game24-demo.jar app.jar
+USER app
+EXPOSE 8080
+ENV TZ=UTC
+ENTRYPOINT ["java", "-jar", "app.jar"]

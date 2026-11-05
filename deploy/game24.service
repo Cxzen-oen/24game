@@ -1,0 +1,23 @@
+[Unit]
+Description=24game (24 points) API and web
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=game24
+Group=game24
+WorkingDirectory=/opt/game24
+EnvironmentFile=/opt/game24/game24.env
+ExecStart=/usr/bin/java -Xms128m -Xmx384m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -Xss512k -XX:+ExitOnOutOfMemoryError -Duser.timezone=UTC -jar /opt/game24/game24-demo.jar
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/game24
+
+[Install]
+WantedBy=multi-user.target

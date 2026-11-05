@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: game24-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-game24}
+      POSTGRES_USER: ${POSTGRES_USER:-game24}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-game24_local_only}
+    ports:
+      - "${POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - game24-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-game24} -d ${POSTGRES_DB:-game24}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  game24-pgdata:

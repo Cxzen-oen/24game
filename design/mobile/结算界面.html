@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>24点双人对战 · 移动端结算</title>
+<link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+<div class="screen result">
+  <header class="topbar">
+    <div class="logo">24</div>
+    <div class="brand">24点双人对战</div>
+    <div class="right" id="tag">限时赛 · 四则级</div>
+  </header>
+
+  <h1 class="rtitle win" id="title">胜利</h1>
+  <p class="rreason" id="reason">答对题数更多</p>
+
+  <section class="rpanel">
+    <div class="rhead"><span>你</span><span>对手</span></div>
+    <div class="rscore"><span id="myScore">8</span><span id="opScore">7</span></div>
+    <div class="rrow"><span>答对题数</span><b id="myN">8</b></div>
+    <div class="rrow"><span>最后正确提交累计用时</span><b id="myLast">02:41</b></div>
+    <div class="rrow"><span>比赛总用时</span><b id="myTotal">03:00</b></div>
+    <div class="rbasis" id="basis">按答对题数</div>
+  </section>
+
+  <div class="record" id="record">限时赛不更新定题赛最快纪录</div>
+  <div class="record" style="background:#F5F2FF;border-color:#D9D2F5;color:var(--primary)">累计答对 1,289 题 · 持续累积，只看自己进步</div>
+
+  <div class="ractions">
+    <button class="btn btn-primary" id="again">再来一局</button>
+    <button class="btn btn-ghost" id="home">返回首页</button>
+  </div>
+</div>
+
+<script>
+const q = new URLSearchParams(location.search);
+const result = q.get('result') || 'win';
+const reason = q.get('reason') || '';
+const mode = q.get('mode') === 'fixed' ? 'fixed' : 'timed';
+const level = q.get('level') || 'l2';
+const my = Number(q.get('my') || 8), op = Number(q.get('op') || 7);
+const $ = id => document.getElementById(id);
+const name = {l1:'加减级', l2:'四则级', l3:'扩展级'}[level] || '四则级';
+
+$('tag').textContent = (mode === 'timed' ? '限时赛' : '定题赛') + ' · ' + name;
+$('myScore').textContent = my;
+$('opScore').textContent = op;
+$('myN').textContent = my + ' 题';
+
+const map = {
+  win: ['win','胜利','答对题数更多','按答对题数'],
+  loss: ['loss','失败','答对题数较少','按答对题数'],
+  draw: ['neutral','平局','答对题数与用时均相同','成绩完全相同'],
+  invalid: ['neutral','本局无效','双方均掉线，本局无效','比赛无效']
+};
+const conf = map[result] || map.win;
+if (reason === 'surrender'){ conf[2] = '你已弃权'; conf[3] = '弃权判负'; }
+if (reason === 'timeout'){ conf[2] = '你断线超时'; conf[3] = '断线判负'; }
+$('title').className = 'rtitle ' + conf[0];
+$('title').textContent = conf[1];
+$('reason').textContent = conf[2];
+$('basis').textContent = conf[3];
+
+if (result === 'win' && mode === 'fixed' && my === 10) $('record').textContent = '你的定题赛最快纪录已更新：08:12';
+else if (mode === 'timed') $('record').textContent = '限时赛不更新定题赛最快纪录';
+
+$('again').addEventListener('click', ()=>location.href='主界面.html');
+$('home').addEventListener('click', ()=>location.href='主界面.html');
+</script>
+</body>
+</html>
