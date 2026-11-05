@@ -351,33 +351,6 @@ p.paragraph_format.space_after = Pt(40)
 p.paragraph_format.line_spacing = 1.65
 set_font(p.add_run("呈报给专业团队，作为评审与指导的底稿。本稿只陈述现状，不含改造方案；所有描述尽量落到代码、数据库迁移与部署记录。文中不当与不详之处，恳请指正。"), 11, False, GREY)
 
-meta = [
-    ("呈报对象", "专业团队（评审与指导）"),
-    ("编制", "项目组"),
-    ("日期", "2026 年 11 月 5 日"),
-    ("代码范围", "demo/web、demo/server、db/migration（2026-11-05 工作区快照）"),
-    ("演示地址", "http://121.43.236.209:8081（HTTP 演示环境）"),
-    ("材料性质", "内部讨论稿；请勿外传，亦不作为对外承诺"),
-]
-t = doc.add_table(rows=0, cols=2)
-t.alignment = WD_TABLE_ALIGNMENT.LEFT
-t.autofit = False
-for k, v in meta:
-    row = t.add_row().cells
-    set_col_width(row[0], 3.6)
-    set_col_width(row[1], 12.8)
-    p0 = row[0].paragraphs[0]
-    p0.paragraph_format.space_after = Pt(2)
-    set_font(p0.add_run(k), 9, False, GREY)
-    p1 = row[1].paragraphs[0]
-    p1.paragraph_format.space_after = Pt(2)
-    set_font(p1.add_run(v), 9.3, False, DARK)
-
-p = doc.add_paragraph()
-p.paragraph_format.space_before = Pt(46)
-p.paragraph_format.space_after = Pt(0)
-set_font(p.add_run("“先把现在讲清楚，再谈下一步。”"), 9.5, False, TEAL)
-
 doc.add_page_break()
 
 h1("一、", "玩法")
@@ -420,7 +393,7 @@ table(
 )
 
 h2("1.3", "成绩与榜单")
-para("A 榜先比答对题数，同题数再比答对最后一题时的计榜用时；B 榜比完成 10 题的总用时。每个账号在每个“模式 × 难度”下只保留一条最佳成绩，共四个榜。游客可以直接玩，但只有登录后的账号成绩进入排行榜；登录或注册时，本机游客成绩会并入账号。")
+para("A 榜先比答对题数，同题数再比答对最后一题时的计榜用时；B 榜比完成 10 题的总用时。每个账号在每个“模式 × 难度”下只保留一条最佳成绩，共四个榜。游客可以直接玩，但只有登录后的账号成绩进入排行榜；登录或注册时，游客成绩会并入账号。")
 
 # ---------------- chapter 3 ----------------
 h1("二、", "总体架构")
@@ -449,12 +422,12 @@ bullet("客户端提交的是三步操作树（c0..c3 / s0..s2 + 算符），不
 bullet("JWT，不建 HttpSession；刷新令牌存库、每次轮换。", "无状态：")
 bullet("对局、成绩、最佳同一 PostgreSQL；排行榜不另建表，直接派生。", "单库事务：")
 bullet("建局用 requestId 唯一；动作 use actionId + fingerprint + revision；行锁串行化同一局。", "幂等与并发：")
-bullet("服务端统一 UTC；前端本地化不足，见 7.1 R7。", "时间：")
+bullet("服务端统一 UTC；前端未做时区转换，时间按 ISO 原文显示。", "时间：")
 
 h2("2.4", "请求路径")
 mono([
     "浏览器",
-    "  │ 同源 /api（开发经 Vite 代理到 :8080）",
+    "  │ 同源 /api",
     "  ▼",
     "Spring Security FilterChain",
     "  ├─ BearerTokenAuthenticationFilter → AccountGuardFilter（账号存在 / ACTIVE / tv 一致）",
@@ -466,21 +439,3 @@ mono([
     "  ▼",
     "GameView / RecordsView / BoardView（JSON）→ 前端重绘",
 ])
-
-h2("2.5", "开发与线上的差别")
-table_caption("表 2-2  两套运行形态")
-table(
-    ["项目", "开发", "线上"],
-    [
-        ("页面", "Vite :5173，/api 代理到 :8080", "Spring Boot 托管 dist，:8081"),
-        ("数据库", "compose PG 16 :55432，或本机 PG 18.1", "本机 PG 14，127.0.0.1:5432"),
-        ("进程", "mvnw spring-boot:run", "systemd game24.service"),
-        ("HTTPS", "无", "无（当前）"),
-        ("备份", "手动", "cron 03:00，pg_dump，保留 14 天"),
-    ],
-    [2.7, 6.7, 7.2],
-    font_size=8.8,
-    header_size=8.8,
-    first_col_bold=True,
-)
-para("详细部署与运维见第六章。")
